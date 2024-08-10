@@ -22,6 +22,7 @@ import Header from "../../components/Header";
 import ImageInput from "./imageInput";
 import { useEffect, useState } from "react";
 
+
 const Team = () => {
   const theme = useTheme();
   const colors = tokens(theme.palette.mode);
@@ -30,17 +31,17 @@ const Team = () => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [updateModalOpen, setUpdateModalOpen] = useState(false)
   const [applicantData , setApplicantData] = useState([])
-  const [UpdateApplicantData,setUpdateApplicantData] = useState([])
+  const [selectedApplicant,setSelectedApplicant] = useState([])
 
   useEffect(() => {
     const fetchApplicants = async () => {
       try {
-        const response = await fetch( 'http://localhost:3006/admin/get-all-applicants');
+        const response = await fetch( 'http://localhost:3005/admin/get-all-applicants');
         if (!response.ok) {
           throw new Error('Network response was not ok');
         }
         const data = await response.json();
-
+        
         const dataWithIds = data.map((applicant, index) => ({
           id:  index, 
           name: applicant.fullname,
@@ -58,8 +59,11 @@ const Team = () => {
 
   console.log("applicants data :" , applicantData)
   
-  const handleImageChange = (file) => {
-    console.log("Selected file:", file);
+  const handleImageChange = (imageUrl) => {
+    setSelectedApplicant(prevState => ({
+      ...prevState,
+      profileImg: imageUrl
+    }));
   };
 
   const handleClickOpen = () => {
@@ -78,31 +82,91 @@ const Team = () => {
     setPreviewOpen(false);
   };
 
-  const handleUpdateModalOpen = (rollno) => {
-    setUpdateModalOpen(true)
-
-    const getApplicantDetails = async (rollNo) => {
-      try{
-        const responseUpdateApplicantData = await fetch(
-          ` http://localhost:3006/admin/get-applicant-by-rollno/${rollNo} `
-        );
-        const updateApplicantData = await responseUpdateApplicantData.json()
-        setUpdateApplicantData(updateApplicantData) 
-      } catch (error) {
-        console.log("error", error);
+ const handleUpdateModalOpen = async (applicant) => {
+    try {
+      const response = await fetch(`http://localhost:3005/admin/get-applicant-by-rollno/${applicant.rollNumber}`);
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
       }
+      const data = await response.json();
+      setSelectedApplicant(data);
+      console.log("Applicant Details", selectedApplicant)
+      setUpdateModalOpen(true);
+    } catch (error) {
+      console.error('Error fetching applicant details:', error);
     }
-  getApplicantDetails()
-  }
-  console.log("applicant Details for update", UpdateApplicantData)
-  const handleUpdateModalClose = () => {
+  };
+
+    const handleUpdateModalClose = () => {
     setUpdateModalOpen(false)
   }
 
-  const handleUpdateApplicant = () => {
-  console.log("i am working")
+  const handleUpdateApplicant = async (event) => {
+    event.preventDefault();
+    
+    const updatedApplicant = {
+      fullname: selectedApplicant.fullname,
+      cnic: selectedApplicant.cnic,
+      email: selectedApplicant.email,
+      contact: selectedApplicant.contact,
+      address: selectedApplicant.address,
+      qualification: selectedApplicant.qualification,
+      gender: selectedApplicant.gender,
+      dateOfBirth: selectedApplicant.dateOfBirth,
+      feeStatus: selectedApplicant.feeStatus,
+      rollNo: selectedApplicant.rollNo,
+      result: selectedApplicant.result,
+      course: selectedApplicant.course,
+      profileImg: selectedApplicant.profileImg,
+    };
+  
+    try {
+      const response = await fetch(`http://localhost:3005/admin/update-applicant-by-cnic`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updatedApplicant)
+      });
+  
+      if (!response.ok) {
+        throw new Error('Failed to update applicant');
+      }
+  
+      const data = await response.json();
+      console.log('Updated applicant:', data);
+      
+      // Optionally, refresh the list of applicants or update the state
+      setUpdateModalOpen(false);
+    } catch (error) {
+      console.error('Error updating applicant:', error);
+    }
+  };
 
-  }
+  const handleDeleteApplicant = async (applicant) => {
+    console.log("applicant details" , applicant)
+    try {
+      const response = await fetch(
+        `http://localhost:3005/admin/delete-applicant-by-rollno/${applicant.rollNumber}`,
+        {
+          method: 'DELETE',
+        }
+      );
+      if (!response.ok) {
+        const errorDetails = await response.text();
+        throw new Error(`Network response was not ok: ${response.status} - ${errorDetails}`);
+      }
+  
+      const data = await response.json();
+      console.log("Deleted applicant data:", data);
+  
+
+    } catch (error) {
+        console.error('Error updating applicant:', error);
+      }
+     }
+  
+  
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -119,7 +183,7 @@ const Team = () => {
       profileImg: event.target[18].value
     };
 
-    await fetch("http://localhost:3006/admin/create-applicant", {
+    await fetch("http://localhost:3005/admin/create-applicant", {
       method: "post",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -149,7 +213,7 @@ const Team = () => {
     console.log("Form Values", formValues);
     handleClickClose();
   };
-
+console.log("selected Applicant" , selectedApplicant , selectedApplicant.address)
 
   const columns = [
     { field: "id", headerName: "ID" },
@@ -181,7 +245,8 @@ const Team = () => {
       field: "accessLevel",
       headerName: "Access Level",
       flex: 1.3,
-      renderCell: ({ row: { accessUpdate, accessDelete } }) => {
+      renderCell: (params) => {
+      const applicant = params.row
         return (
           <>
             <Box m="0 10px 0 0">
@@ -205,7 +270,7 @@ const Team = () => {
                 fontSize: "14px",
             padding: "5px 10px",
               }} 
-              onClick={handleUpdateModalOpen}
+              onClick={() => handleUpdateModalOpen(applicant)}
               >
               <EditOutlinedIcon sx={{ mr: "5px" }}/>
                 Update
@@ -226,7 +291,10 @@ const Team = () => {
                 color: colors.grey[100],
                 fontSize: "14px",
             padding: "5px 10px",
-              }}>
+              }}
+              onClick={() => handleDeleteApplicant(applicant)}
+
+              >
                 <DeleteOutlineOutlinedIcon sx={{ mr: "5px" }}/>
                 Delete
               </Button>
@@ -398,6 +466,8 @@ const Team = () => {
               type="text"
               sx={{ width: "48%", marginRight: "10px" }}
               variant="outlined"
+              value={selectedApplicant.fullname}
+              onChange={(e) => setSelectedApplicant({ ...selectedApplicant, fullname: e.target.value })}
               required
             />
             <TextField
@@ -407,6 +477,8 @@ const Team = () => {
               type="number"
               sx={{ width: "48%" }}
               variant="outlined"
+              value={selectedApplicant.cnic}
+              onChange={(e) => setSelectedApplicant({ ...selectedApplicant, cnic: e.target.value })}
               required
             />
             <TextField
@@ -417,6 +489,8 @@ const Team = () => {
               sx={{ width: "48%", marginRight: "10px" }}
               mr="5px"
               variant="outlined"
+              value={selectedApplicant.email}
+              onChange={(e) => setSelectedApplicant({ ...selectedApplicant, email: e.target.value })}
               required
             />
             <TextField
@@ -426,6 +500,8 @@ const Team = () => {
               type="number"
               sx={{ width: "48%" }}
               variant="outlined"
+              value={selectedApplicant.contact}
+              onChange={(e) => setSelectedApplicant({ ...selectedApplicant, contact: e.target.value })}
               required
             />
             <TextField
@@ -436,6 +512,8 @@ const Team = () => {
               sx={{ width: "48%", marginRight: "10px" }}
               mr="5px"
               variant="outlined"
+              value={selectedApplicant.address}
+              onChange={(e) => setSelectedApplicant({ ...selectedApplicant, address: e.target.value })}
               required
             />
             <TextField
@@ -445,6 +523,8 @@ const Team = () => {
               type="text"
               sx={{ width: "48%" }}
               variant="outlined"
+              value={selectedApplicant.qualification}
+              onChange={(e) => setSelectedApplicant({ ...selectedApplicant, qualification: e.target.value })}
               required
             />
             <TextField
@@ -455,6 +535,8 @@ const Team = () => {
               sx={{ width: "48%", marginRight: "10px" }}
               mr="5px"
               variant="outlined"
+              value={selectedApplicant.gender}
+              onChange={(e) => setSelectedApplicant({ ...selectedApplicant, gender: e.target.value })}
               required
             />
             <TextField
@@ -464,6 +546,41 @@ const Team = () => {
               type="text"
               sx={{ width: "48%" }}
               variant="outlined"
+              value={selectedApplicant.dateOfBirth}
+              onChange={(e) => setSelectedApplicant({ ...selectedApplicant, dateOfBirth: e.target.value })}
+              required
+            />
+            <TextField
+            margin="dense"
+            id="dateOfBirth"
+            label="Fee Status"
+            type="text"
+            sx={{ width: "48%", marginRight: "10px"  }}
+            variant="outlined"
+            value={selectedApplicant.feeStatus}
+            onChange={(e) => setSelectedApplicant({ ...selectedApplicant, feeStatus: e.target.value })}
+            required
+          />
+           <TextField
+              margin="dense"
+              id="rollNo"
+              label="Roll Number"
+              type="text"
+              sx={{ width: "48%" }}
+              variant="outlined"
+              value={selectedApplicant.rollNo}
+              onChange={(e) => setSelectedApplicant({ ...selectedApplicant, rollNo: e.target.value })}
+              required
+            />
+             <TextField
+              margin="dense"
+              id="result"
+              label="Result"
+              type="text"
+              sx={{ width: "48%", marginRight: "10px"  }}
+              variant="outlined"
+              value={selectedApplicant.result}
+              onChange={(e) => setSelectedApplicant({ ...selectedApplicant, result: e.target.value })}
               required
             />
             <TextField
@@ -473,8 +590,22 @@ const Team = () => {
               type="text"
               fullWidth
               variant="outlined"
+              sx={{ width: "48%" }}
+              value={selectedApplicant.course}
+              onChange={(e) => setSelectedApplicant({ ...selectedApplicant, course: e.target.value })}
               required
             />
+            <TextField
+        margin="dense"
+        id="profileImg"
+        label="Profile Image URL"
+        type="text"
+        sx={{ width: "48%", marginRight: "10px" }}
+        variant="outlined"
+        value={selectedApplicant.profileImg}
+        onChange={(e) => setSelectedApplicant({ ...selectedApplicant, profileImg: e.target.value })}
+        required
+      />
             <Container>
               <Typography variant="h4" gutterBottom>
                 Upload an Image
@@ -487,7 +618,7 @@ const Team = () => {
                 Cancel
               </Button>
               <Button type="submit" color="secondary">
-                Add Applicant
+                Update Applicant
               </Button>
             </DialogActions>
           </form>
